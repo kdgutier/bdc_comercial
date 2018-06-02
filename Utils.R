@@ -16,7 +16,11 @@ library(lubridate)
 com_data <- read_excel("./data/DemandForecast_Challenge (1).xlsx", sheet = "HistoricoVentas") 
 colnames(com_data) <- tolower(colnames(com_data))
 
-### TIME DUMMIES
+#########################################################################################################
+#                 FEATURE ENGINEERING AND DATASETS
+#########################################################################################################
+
+# TIME DUMMIES
 com_data <- com_data %>%
   mutate(month = as.factor(month(com_data$mes)),
          year = as.factor(year(com_data$mes)),
@@ -25,5 +29,12 @@ com_data <- com_data %>%
 
 # drop original date
 com_data$mes <- NULL
-
 save(com_data, file="./data/data_baseline.Rda")
+
+
+#########################################################################################################
+#                 EVALUATION METRICS
+#########################################################################################################
+
+
+
