@@ -20,6 +20,7 @@ library(DataExplorer)
 library(DT)
 #library(sweep)
 library(forecast)
+set.seed(1990)
 
 ```
 
@@ -157,7 +158,6 @@ by_agencia_year_mes <- com_data %>%
 x<-com_data
 x$unique_id<-paste0(x$subagencia,x$sku)
 
-
 #unique(by_agencia_year_mes$Subagencia) 
 
 rand<-sample(x$unique_id,50)
@@ -201,105 +201,90 @@ ggplot(subset(by_agencia_year_mes, by_agencia_year_mes$subagencia%in%rand), aes(
 ### 4. Modelo
 
 Después del análisis de los datos y de un riguroso análisis matemático, descubrimos que la función objectivo debería minimizar los errores absolutos y no como comúnmente es el caso los errores cuadráticos.
-Creemos que el método de evaulación del Hackaton está formulado en este sentido debido a la cantidad de datos atípicos que toman el valor cero.
+Creemos que el método de evaluación del Hackathon está formulado en este sentido debido a la cantidad de datos atípicos que toman el valor cero.
 
-Decidimos implementar un __modelo autorevresivo integrado de medias móviles__ (ARIMA) especificando el método de optimización a través de la minimización de los errores absolutos.
+Por el momento decidimos implementar de forma local para cada interacción de SKU y subagencia un __modelo autorregresivo integrado de medias móviles__ (ARIMA), especificando el método de optimización a través de la minimización de los errores cuadráticos, estos 8,943 modelos locales integran el ensamble. La ventaja de utilizar un modelo de este tipo para cada una de las posibles combinaciones consiste en poder capturar la variabilidad, estacionalidad y tendencia específica para cada posible combinación; aún aquellas que presentran un patrón atípico o aberrante.
 
+En un futuro se podría realizar un modelo ARIMA para la mediana a fin de optimizar de forma directa la métrica de evaluación de los modelos. 
+
+Los archivos que contiene los modelos individuales y la base con las predicciones para cada Marzo, Abril, Mayo de 2018 se anexan. A continuación presentamos algunos resultados indicativos.
 
 ```{r}
-#crear id unico
-com_data$unique_id <- paste0(com_data$subagencia,com_data$sku)
+# #crear id unico
+# com_data$unique_id <- paste0(com_data$subagencia,com_data$sku)
+# 
+# #rand<-sample(com_data$unique_id,5)
+# #com_data2 <- filter(com_data, unique_id %in% rand)
+# 
+# base_line <- function(series){
+#   fit <- auto.arima(series)
+#   return(fit)
+# }
+# 
+# create_ts <- function(id,db){
+#   series <- filter(db, unique_id == id)
+#   series <- ts(series, frequency=12, start=c(2013,1))
+#   series <- series[,"hectolitros"]
+#   return(series)
+# }
+# 
+# #head(create_ts("1021700000203", com_data2))
+# #test<-create_ts("1021700000203", com_data2)
+# resultado_final<-data_frame(unique_id=as.character(), 
+#                             marzo=as.numeric(), abril=as.numeric(), mayo=as.numeric())
+# for (x in unique(com_data$unique_id)){
+#   rm(fit)
+#   print(x)
+#   ts<-create_ts(x,com_data)
+#   print(head(ts))
+#   fit<-base_line(ts)
+#   #fit<-base_line(create_ts(unique_id,com_data2))
+#   name<-as.character(x)
+#   print(fit$coef)
+#   save(fit, file=paste0("./models/",name,".rda"))
+#   resultado_final <- rbind(resultado_final, cbind(x, as.numeric(forecast(fit,3)$mean)))
+# }
+# resultado_final$mes<-c("Mar-18","Apr-18","May-18")
+# resultado_final <- mutate(resultado_final, subagencia=substr(as.character(x), 1, 5), 
+#                                            sku=substr(as.character(x), 6, nchar(as.character(x))) )
+# save(resultado_final, file="resultado_final.rda")
 
-#rand<-sample(com_data$unique_id,5)
-#com_data2 <- filter(com_data, unique_id %in% rand)
-
-base_line <- function(series){
-  fit <- auto.arima(series)
-  return(fit)
-}
-
-create_ts <- function(id,db){
-  series <- filter(db, unique_id == id)
-  series <- ts(series, frequency=12, start=c(2013,1))
-  series <- series[,"hectolitros"]
-  return(series)
-}
-
-#head(create_ts("1021700000203", com_data2))
-#test<-create_ts("1021700000203", com_data2)
-resultado_final<-data_frame(unique_id=as.character(), 
-                            marzo=as.numeric(), abril=as.numeric(), mayo=as.numeric())
-for (x in unique(com_data$unique_id)){
-  rm(fit)
-  print(x)
-  ts<-create_ts(x,com_data)
-  print(head(ts))
-  fit<-base_line(ts)
-  #fit<-base_line(create_ts(unique_id,com_data2))
-  name<-as.character(x)
-  print(fit$coef)
-  save(fit, file=paste0("./models/",name,".rda"))
-  resultado_final <- rbind(resultado_final, cbind(x, as.numeric(forecast(fit,3)$mean)))
-}
-resultado_final$mes<-c("Mar-18","Apr-18","May-18")
-resultado_final <- mutate(resultado_final, subagencia=substr(as.character(x), 1, 5), 
-                                           sku=substr(as.character(x), 6, nchar(as.character(x))) )
-save(resultado_final, file="resultado_final.rda")
-
-forecast_kam<-function(sku,subagencia,n=2){
-  unique_id <- paste0(subagencia,sku)
-  load(paste0("./models/",unique_id,".rda"))
-  return(forecast(fit,n)$mean[1])
-}
-
-forecast_kam("1020300000001")
+load("resultado_final.rda")
 
 ```
 
 ### 5. Evaluación del modelo
 
+La evaluacioón de los modelos se hizo de forma individualizada para cada una de las interacciones SKU-subagencia, no separamos los datos del último mes para validar los modelos porque en muchos de los modelos autorregresivos el lag de orden 1 demostró ser un gran predictor.
 
+Lo que nosotros sugerimos es entrenar estos modelos "online", evaluándolos usando Cross Validation con ventanas móviles.
 
-```{r}
+```{r,echo=T,message=FALSE,warning=FALSE,fig.width=12,fig.height=10}
+### Predicción gráfica
+forecast_kam<-function(sku,subagencia,n=3){
+ unique_id <- paste0(subagencia,sku)
+ load(paste0("./models/", unique_id,".rda"))
+ return(forecast(fit,n))
+}
+
+# Modelo para el par de Agencia y Skuss mas relevante
 top1_sku<- "00000025"
 top1_age<- "10129"
+plot(forecast_kam(top1_sku, top1_age), main = paste0("Agencia: ",top1_age, " Sku: ", top1_sku))
+accuracy(forecast_kam(top1_sku,top1_age))
 
-top1<-subset(com_data, com_data$SKU==top1_sku & com_data$Subagencia==top1_age)
+# Modelo para el par de Agencia y Skuss aleatorio
+rand_sku<- sample(com_data$sku,1)
+rand_age<- sample(com_data$subagencia,1)
+plot(forecast_kam(rand_sku,rand_age), main = paste0("Agencia: ",rand_age, " Sku: ", rand_sku))
+accuracy(forecast_kam(rand_sku,rand_age))
 
-decompose(top1)
-
-plot.ts(top1[,-1])
-
-
-top1 <- ts(top1, frequency=12, start=c(2013,1))
-decompose_top1 <- decompose(top1)
-plot(decompose_top1)
-library(forecast)
-fit <- auto.arima(top1[,"Hectolitros"])
-fit
-accuracy(fit)
-plot(forecast(fit, 1))
-
-com_data2<-subset(com_data,com_data$hectolitros==0)
-rand_sku <- sample(com_data2$sku,1)
-rand_age <- sample(com_data2$subagencia,1)
-rand_series <- subset(com_data2, ((com_data2$sku %in% rand_sku) & (com_data2$subagencia %in% rand_age) ))
-rand_series <- ts(rand_series, frequency=12, start=c(2013,1))
-rand_series <- rand_series[,"hectolitros"]
-plot(rand_series)
-fit <- auto.arima(rand_series)
-fit
-accuracy(fit)
-#plot(fit)
-plot(forecast(fit, 1)) 
-tsdisplay(residuals(fit), lag.max=45, main='(1,1,1) Model Residuals')
-
-
-
-
-
+# Modelo para el par de Agencia y Skuss aleatorio
+rand_sku<- sample(com_data$sku,1)
+rand_age<- sample(com_data$subagencia,1)
+plot(forecast_kam(rand_sku,rand_age), main = paste0("Agencia: ",rand_age, " Sku: ", rand_sku))
+accuracy(forecast_kam(rand_sku,rand_age))
 ```
 
-
-
+![Tabla](./tabla_resultados.png)
 
