@@ -18,7 +18,7 @@ library("TTR")
 library(lubridate)
 library(DataExplorer)
 library(DT)
-library(sweep)
+#library(sweep)
 library(forecast)
 
 ```
@@ -27,8 +27,7 @@ library(forecast)
 
 ```{r,message=FALSE,warning=FALSE}
 ###Leer los datos
-root <- '~/Dropbox/bdc_comercial/data/'
-com_data <- read_excel(paste0(root,"DemandForecast_Challenge (1).xlsx"), sheet = "HistoricoVentas")
+com_data <- read_excel("./data/DemandForecast_Challenge (1).xlsx", sheet = "HistoricoVentas")
 
 #pasar los headers a minusculas
 colnames(com_data) <- tolower(colnames(com_data))
@@ -230,7 +229,7 @@ create_ts <- function(id,db){
 #test<-create_ts("1021700000203", com_data2)
 resultado_final<-data_frame(unique_id=as.character(), 
                             marzo=as.numeric(), abril=as.numeric(), mayo=as.numeric())
-for (x in unique(com_data$unique_id)[1:3]){
+for (x in unique(com_data$unique_id)){
   rm(fit)
   print(x)
   ts<-create_ts(x,com_data)
@@ -243,6 +242,8 @@ for (x in unique(com_data$unique_id)[1:3]){
   resultado_final <- rbind(resultado_final, cbind(x, as.numeric(forecast(fit,3)$mean)))
 }
 resultado_final$mes<-c("Mar-18","Apr-18","May-18")
+resultado_final <- mutate(resultado_final, subagencia=substr(as.character(x), 1, 5), 
+                                           sku=substr(as.character(x), 6, nchar(as.character(x))) )
 save(resultado_final, file="resultado_final.rda")
 
 forecast_kam<-function(sku,subagencia,n=2){
