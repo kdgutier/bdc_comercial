@@ -63,7 +63,7 @@
 # sMAPE(baseline_preds, test_data$hectolitros)
 # #sMAPE(xgb_preds, test_data$hectolitros)
 
-list.of.packages <- c("ggplot2", "Rcpp")
+list.of.packages <- c("tidyverse", "readxl", "ggplot2", "scales", "TTR", "lubridate", "DataExplorer", "DT")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 
