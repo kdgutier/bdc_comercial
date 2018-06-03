@@ -18,6 +18,9 @@ library("TTR")
 library(lubridate)
 library(DataExplorer)
 library(DT)
+library(sweep)
+library(forecast)
+
 ```
 
 ### 2. A continuación leemos los datos que fueron entregados por el equipo del Hackaton
@@ -203,13 +206,98 @@ Creemos que el método de evaulación del Hackaton está formulado en este senti
 
 Decidimos implementar un __modelo autorevresivo integrado de medias móviles__ (ARIMA) especificando el método de optimización a través de la minimización de los errores absolutos.
 
-P.D. Chucho vete a la __VERGA__
 
 ```{r}
+#crear id unico
+com_data$unique_id <- paste0(com_data$subagencia,com_data$sku)
+
+#rand<-sample(com_data$unique_id,5)
+#com_data2 <- filter(com_data, unique_id %in% rand)
+
+base_line <- function(series){
+  fit <- auto.arima(series)
+  return(fit)
+}
+
+create_ts <- function(id,db){
+  series <- filter(db, unique_id == id)
+  series <- ts(series, frequency=12, start=c(2013,1))
+  series <- series[,"hectolitros"]
+  return(series)
+}
+
+#head(create_ts("1021700000203", com_data2))
+#test<-create_ts("1021700000203", com_data2)
+resultado_final<-data_frame(unique_id=as.character(), 
+                            marzo=as.numeric(), abril=as.numeric(), mayo=as.numeric())
+for (x in unique(com_data$unique_id)[1:3]){
+  rm(fit)
+  print(x)
+  ts<-create_ts(x,com_data)
+  print(head(ts))
+  fit<-base_line(ts)
+  #fit<-base_line(create_ts(unique_id,com_data2))
+  name<-as.character(x)
+  print(fit$coef)
+  save(fit, file=paste0("./models/",name,".rda"))
+  resultado_final <- rbind(resultado_final, cbind(x, as.numeric(forecast(fit,3)$mean)))
+}
+resultado_final$mes<-c("Mar-18","Apr-18","May-18")
+save(resultado_final, file="resultado_final.rda")
+
+forecast_kam<-function(sku,subagencia,n=2){
+  unique_id <- paste0(subagencia,sku)
+  load(paste0("./models/",unique_id,".rda"))
+  return(forecast(fit,n)$mean[1])
+}
+
+forecast_kam("1020300000001")
 
 ```
 
+### 5. Evaluación del modelo
 
+
+
+```{r}
+top1_sku<- "00000025"
+top1_age<- "10129"
+
+top1<-subset(com_data, com_data$SKU==top1_sku & com_data$Subagencia==top1_age)
+
+decompose(top1)
+
+plot.ts(top1[,-1])
+
+
+top1 <- ts(top1, frequency=12, start=c(2013,1))
+decompose_top1 <- decompose(top1)
+plot(decompose_top1)
+library(forecast)
+fit <- auto.arima(top1[,"Hectolitros"])
+fit
+accuracy(fit)
+plot(forecast(fit, 1))
+
+com_data2<-subset(com_data,com_data$hectolitros==0)
+rand_sku <- sample(com_data2$sku,1)
+rand_age <- sample(com_data2$subagencia,1)
+rand_series <- subset(com_data2, ((com_data2$sku %in% rand_sku) & (com_data2$subagencia %in% rand_age) ))
+rand_series <- ts(rand_series, frequency=12, start=c(2013,1))
+rand_series <- rand_series[,"hectolitros"]
+plot(rand_series)
+fit <- auto.arima(rand_series)
+fit
+accuracy(fit)
+#plot(fit)
+plot(forecast(fit, 1)) 
+tsdisplay(residuals(fit), lag.max=45, main='(1,1,1) Model Residuals')
+
+
+
+
+
+```
 
 
 
